@@ -25,18 +25,18 @@ for corpus, Corpus in zip(['news', 'books'], ['News', 'Books']):
 
     for split in ['forget', 'retain', 'holdout']:
         privleak = load_dataset(f"muse-bench/MUSE-{Corpus}", 'privleak', split=split)['text']
-        write_json(privleak, f"data/{corpus}/privleak/{split}.json")
+        write_json(list(privleak), f"data/{corpus}/privleak/{split}.json")
 
     for split in ['forget', 'holdout', 'retain1', 'retain2']:
         raw = load_dataset(f"muse-bench/MUSE-{Corpus}", 'raw', split=split)['text']
-        write_json(raw, f"data/{corpus}/raw/{split}.json")
+        write_json(list(raw), f"data/{corpus}/raw/{split}.json")
         write_text("\n\n".join(raw), f"data/{corpus}/raw/{split}.txt")
 
 
 for crit in ['scal', 'sust']:
     for fold in range(1, 5):
         data = load_dataset(f"muse-bench/MUSE-News", crit, split=f"forget_{fold}")['text']
-        write_json(data, f"data/news/{crit}/forget_{fold}.json")
+        write_json(list(data), f"data/news/{crit}/forget_{fold}.json")
         write_text("\n\n".join(data), f"data/news/{crit}/forget_{fold}.txt")
 
 print("Download complete!")

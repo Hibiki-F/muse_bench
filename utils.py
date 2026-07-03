@@ -4,8 +4,8 @@ import os
 from typing import List, Dict
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-
-def read_json(fpath: str) -> Dict | List:
+# def read_json(fpath: str) -> Dict | List:
+def read_json(fpath: str):
     with open(fpath, 'r') as f:
         return json.load(f)
 
@@ -16,6 +16,7 @@ def read_text(fpath: str) -> str:
 
 
 def write_json(obj: Dict | List, fpath: str):
+# def write_json(obj, fpath: str):
     os.makedirs(os.path.dirname(fpath), exist_ok=True)
     with open(fpath, 'w') as f:
         return json.dump(obj, f)
@@ -31,10 +32,17 @@ def write_csv(obj, fpath: str):
     os.makedirs(os.path.dirname(fpath), exist_ok=True)
     pd.DataFrame(obj).to_csv(fpath, index=False)
 
-
+    
 def load_model(model_dir: str, **kwargs):
+    # Modified for GPU / Model Parallelism
+    if "device_map" not in kwargs:
+        kwargs["device_map"] = "auto"
+    if "torch_dtype" not in kwargs:
+        kwargs["torch_dtype"] = "auto"
+        
+    print(f"[utils.load_model] Loading from {model_dir} with kwargs: {kwargs}")
     return AutoModelForCausalLM.from_pretrained(model_dir, **kwargs)
 
-
+    
 def load_tokenizer(tokenizer_dir: str, **kwargs):
     return AutoTokenizer.from_pretrained(tokenizer_dir, **kwargs)

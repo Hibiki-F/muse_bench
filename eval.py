@@ -29,6 +29,8 @@ def eval_model(
     knowmem_retain_qa_file: str | None = None,
     knowmem_retain_qa_icl_file: str | None = None,
     temp_dir: str | None = None,
+    name: str | None = None,    # 'name' パラメータを追加
+    batch_size: int = 8         # バッチサイズを追加
 ) -> Dict[str, float]:
     # Argument sanity check
     if not metrics:
@@ -59,7 +61,8 @@ def eval_model(
             prompts=[d['prompt'] for d in data],
             gts=[d['gt'] for d in data],
             model=model, tokenizer=tokenizer,
-            max_new_tokens=verbmem_max_new_tokens
+            max_new_tokens=verbmem_max_new_tokens,
+            batch_size=batch_size
         )
         if temp_dir is not None:
             write_json(agg, os.path.join(temp_dir, "verbmem_f/agg.json"))
@@ -72,12 +75,24 @@ def eval_model(
             forget_data=read_json(privleak_forget_file),
             retain_data=read_json(privleak_retain_file),
             holdout_data=read_json(privleak_holdout_file),
-            model=model, tokenizer=tokenizer
+            model=model, tokenizer=tokenizer,
+            batch_size=batch_size
         )
         if temp_dir is not None:
             write_json(auc, os.path.join(temp_dir, "privleak/auc.json"))
             write_json(log, os.path.join(temp_dir, "privleak/log.json"))
-        out['privleak'] = (auc[privleak_auc_key] - AUC_RETRAIN[privleak_auc_key]) / AUC_RETRAIN[privleak_auc_key] * 100
+        
+        # 生のAUCスコアを取得して記録
+        current_auc = auc.get(privleak_auc_key, 0.0)
+        out['privleak_raw_auc'] = current_auc
+        
+        # 相対スコアの計算
+        if name.lower() == 'baseline':
+            # Baseline自身は基準なので相対変化は 0.0
+            out['privleak'] = 0.0
+        else:
+            baseline_score = AUC_RETRAIN[corpus][privleak_auc_key]
+            out['privleak'] = (auc[privleak_auc_key] - baseline_score) / baseline_score * 100
 
     # 3. knowmem_f
     if 'knowmem_f' in metrics:
@@ -89,7 +104,8 @@ def eval_model(
             icl_qs=[d['question'] for d in icl],
             icl_as=[d['answer'] for d in icl],
             model=model, tokenizer=tokenizer,
-            max_new_tokens=knowmem_max_new_tokens
+            max_new_tokens=knowmem_max_new_tokens,
+            batch_size=batch_size
         )
         if temp_dir is not None:
             write_json(agg, os.path.join(temp_dir, "knowmem_f/agg.json"))
@@ -106,7 +122,8 @@ def eval_model(
             icl_qs=[d['question'] for d in icl],
             icl_as=[d['answer'] for d in icl],
             model=model, tokenizer=tokenizer,
-            max_new_tokens=knowmem_max_new_tokens
+            max_new_tokens=knowmem_max_new_tokens,
+            batch_size=batch_size
         )
         if temp_dir is not None:
             write_json(agg, os.path.join(temp_dir, "knowmem_r/agg.json"))
@@ -123,7 +140,8 @@ def load_then_eval_models(
     tokenizer_dir: str = LLAMA_DIR,
     out_file: str | None = None,
     metrics: List[str] = SUPPORTED_METRICS,
-    temp_dir: str = "temp"
+    temp_dir: str = "temp",
+    batch_size: int = 8
 ) -> DataFrame:
     # Argument sanity check
     if not model_dirs:
@@ -142,7 +160,9 @@ def load_then_eval_models(
         tokenizer = load_tokenizer(tokenizer_dir)
         res = eval_model(
             model, tokenizer, metrics, corpus,
-            temp_dir=os.path.join(temp_dir, name)
+            temp_dir=os.path.join(temp_dir, name),
+            name=name, # 'name'をeval_modelに渡す
+            batch_size=batch_size
         )
         out.append({'name': name} | res)
         if out_file is not None: write_csv(out, out_file)
@@ -158,5 +178,6 @@ if __name__ == '__main__':
     parser.add_argument('--corpus', type=str, required=True, choices=CORPORA)
     parser.add_argument('--out_file', type=str, required=True)
     parser.add_argument('--metrics', type=str, nargs='+', default=SUPPORTED_METRICS)
+    parser.add_argument('--batch_size', type=int, default=32)
     args = parser.parse_args()
     load_then_eval_models(**vars(args))
